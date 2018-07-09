@@ -1,0 +1,12 @@
+server1,app1,/home/newrelic/prd-app1/newrelic.jar
+server1,app2,/home/newrelic/prd-app2/newrelic.jar
+server1,app3,/home/newrelic/prd-app3/newrelic.jar
+server2,app1,/home/newrelic/prd-app1/newrelic.jar
+server2,app2,/home/newrelic/prd-app2/newrelic.jar
+server2,app3,/home/newrelic/prd-app3/newrelic.jar
+server3,app1,/home/newrelic/prd-app1/newrelic.jar
+server3,app2,/home/newrelic/prd-app2/newrelic.jar
+server3,app3,/home/newrelic/prd-app3/newrelic.jar
+server4,app1,/home/newrelic/dev-app1/newrelic.jar
+server4,app2,/home/newrelic/dev-app2/newrelic.jar
+server4,app3,/home/newrelic/dev-app3/newrelic.jar

@@ -9,7 +9,7 @@ For a more detailed overview, please see: <http://blog.thiele.pro/2018/07/09/Aut
 My first attempt at the script didn't work as expected. We had to shutdown the WebLogic instances first before running the script for it to work.
 I have renamed that script to be change-javaagent-viaconfigxml.py. I cloned it to a new script named change-javaagent-vianodemanager.py and tweaked 
 that to work with some other files that can be edited while WebLogic is running and restarted by another team based on their own time, which was
-the whole goal. :-D I also include some logic to backup the files and actually replace them with the new files that included the new arguments.
+the whole goal. :-D I also included some logic to backup the files and actually replace them with the new files that include the new arguments.
 
 # Execution
 

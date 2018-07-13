@@ -3,10 +3,13 @@
 import lxml.etree as ET
 import csv
 import socket
+import os.path
 import sys
 import argparse
 
 # handle the arguments
+csv_file = ""
+config_file = ""
 summary_help = ("""automate the process to update the server-start arguments of hundreds of WebLogic Managed Servers.
   see https://github.com/jdthiele/weblogic-server-start-changes for more details""")
 paths_help = ("""Provide the path to the csv file that contains 3 columns:
@@ -16,18 +19,21 @@ paths_help = ("""Provide the path to the csv file that contains 3 columns:
 config_help = ("Provide the path to the weblogic domain's config.xml file")
 
 parser = argparse.ArgumentParser(description = summary_help)
-parser.add_argument('-p', '--paths_csv', help=paths_help, nargs=1, metavar="CSV_FILE", required=True)
-parser.add_argument('-c', '--config_file', help=config_help, nargs=1, metavar="CONFIG_FILE", required=True)
+parser.add_argument('-p', '--paths_csv', help=paths_help, nargs=1, required=True)
+parser.add_argument('-c', '--config_file', help=config_help, nargs=1, required=True)
 args=parser.parse_args()
 
 # constants
-wls_config = CONFIG_FILE
+wls_config = args.config_file[0]
 wls_config_output = 'out.xml'
-apm_agent_path = CSV_FILE
+apm_agent_path = args.paths_csv[0]
+print(wls_config, apm_agent_path)
 
 #variables
 correct_path = ""
 current_path = ""
+write_new_file = 0
+hostname = socket.gethostname()
 
 # open the csv file to check against
 csv_file = csv.reader(open(apm_agent_path, "rb"), dialect='excel')
@@ -46,11 +52,12 @@ servers = tree.findall('.//{%s}server' % namespace)
 for server in servers:
   #print "New SERVER node detected:"
   for child in server:
+    javaagent_exists = 0
     tag = child.tag
     arg = child.text
     if child.tag == "{" + namespace + "}name":
       jvmname = child.text
-      print("jvmname is: %s" % (jvmname))
+      print("JVM name is: %s" % (jvmname))
     #print tag, val
     if child.tag == "{" + namespace + "}server-start":
       for args in child:
@@ -62,9 +69,8 @@ for server in servers:
           arg2 = argval2[i].split(":")
           #print(arg2tag)
           if arg2[0] == '-javaagent':
+            javaagent_exists = 1
             current_path = arg2[1]
-            #get the correct path from the spreadsheet
-            hostname = socket.gethostname()
             for row in csv_list:
               #print (row[1], jvmname)
               if row[0] == hostname and row[1] == jvmname:
@@ -78,10 +84,31 @@ for server in servers:
               argval2[i] = ":".join(arg2)
               newargval = " ".join(argval2)
               args.text = newargval
+              write_new_file = 1
             else:
               print("current path %s is ACCURATE. Yay!" % (current_path))
+        # if this server doesn't have a javaagent argument, add it
+        if javaagent_exists == 0:
+          for row in csv_list:
+            if row[0] == hostname and row[1] == jvmname:
+              if row[1]:
+                correct_path = row[3]
+                # check if the file in correct_path exists
+                if os.path.isfile(correct_path) == False:
+                  print("WARNING: the file %s does NOT exist" % (correct_path))
+                javaagent_arg = "-javaagent:" + correct_path
+                argval2.append(javaagent_arg)
+                newargval = " ".join(argval2)
+                args.text = newargval
+                print("New arg line is:\n" + args.text)
+                write_new_file = 1
+
   print
 
-tree.write(wls_config_output, pretty_print=True, encoding='UTF-8', xml_declaration=True)
+if write_new_file == 1:
+  tree.write(wls_config_output, pretty_print=True, encoding='UTF-8', xml_declaration=True)
+  print("Wrote a new file to %s with the changes. Copy this over the existing %s" % (wls_config_output, wls_config))
+elif write_new_file == 0:
+  print("No need to make any changes here")
 
 # all done!

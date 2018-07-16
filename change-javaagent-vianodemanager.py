@@ -209,21 +209,26 @@ for managed_server in managed_servers:
     new_file.close()
   old_file.close()
 
-  #'''
   # if we made changes move the files around
   if overwrite_file == True:
+    # get the uid and gid numbers for oracle:dba
+    uid = pwd.getpwnam("oracle").pw_uid
+    gid = grp.getgrnam("dba").gr_gid
     #backup the original file
     if os.path.isfile(bkup_file) == False:
       shutil.copy2(input_file, bkup_file)
+      os.chown(bkup_file, uid, gid)
       print("created backup: " + bkup_file)
     else:
       bkup_file = input_file + "." + datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+      os.chown(bkup_file, uid, gid)
       shutil.copy2(input_file, bkup_file)
       print("created backup: " + bkup_file)
     #copy the new file over the old file
     shutil.copy2(output_file, input_file)
+    os.chown(output_file, uid, gid)
+    os.chown(input_file, uid, gid)
     print("copied the new file over " + input_file)
-  #'''
 
   print
 

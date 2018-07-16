@@ -7,6 +7,8 @@ import sys
 import argparse
 import datetime
 import shutil
+import pwd
+import grp
 
 # handle the arguments
 csv_file = ""
@@ -100,6 +102,7 @@ for managed_server in managed_servers:
         javaagent_exists = 0
         args = line.replace(line_search,"").split()
         args_count = len(args)
+        args_count -= 1
         for i, arg in enumerate(args):
           arg2 = args[i].split(":")
           # if the javaagent argument exists, do the following
@@ -221,8 +224,8 @@ for managed_server in managed_servers:
       print("created backup: " + bkup_file)
     else:
       bkup_file = input_file + "." + datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-      os.chown(bkup_file, uid, gid)
       shutil.copy2(input_file, bkup_file)
+      os.chown(bkup_file, uid, gid)
       print("created backup: " + bkup_file)
     #copy the new file over the old file
     shutil.copy2(output_file, input_file)

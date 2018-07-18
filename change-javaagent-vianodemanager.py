@@ -35,10 +35,9 @@ apm_agent_path = args.paths_csv[0]
 overwrite_file = False
 hostname = socket.gethostname()
 
-# open the csv file to check against
-csv_file = open(apm_agent_path, "rb")
-csv_reader = csv.reader(csv_file, dialect='excel')
-csv_list = list(csv_reader)
+# get the uid and gid numbers for oracle:dba
+uid = pwd.getpwnam("oracle").pw_uid
+gid = grp.getgrnam("dba").gr_gid
 
 # find all the managed servers in wls_home/user_projects/domains/base_domain/servers minus AdminServer and domain_bak
 managed_servers = os.listdir(wls_home + "/user_projects/domains/base_domain/servers")
@@ -47,6 +46,24 @@ managed_servers.remove("domain_bak")
 
 # define the files to work with
 startWebLogic_file = wls_home + "/user_projects/domains/base_domain/bin/startWebLogic.sh"
+policy_file = wls_home + "/wlserver/server/lib/weblogic.policy"
+policy_file_new = policy_file + ".new"
+policy_file_bkup = policy_file + ".orig"
+write_pol_lines_once = False
+overwrite_pol_file = False
+ 
+# remove any pre-existing new policy files
+if os.path.isfile(policy_file_new):
+  os.remove(policy_file_new)
+
+# open the csv file to check against
+csv_file = open(apm_agent_path, "rb")
+csv_reader = csv.reader(csv_file, dialect='excel')
+csv_list = list(csv_reader)
+
+# open the policy file
+pol_file = open(policy_file, "rb")
+new_pol_file = open(policy_file_new, "w")
 
 # for each managed server, go do some stuff
 for managed_server in managed_servers:
@@ -69,6 +86,7 @@ for managed_server in managed_servers:
     line_end = ''
   bkup_file = input_file + ".orig"
   output_file = input_file + ".new"
+  overwrite_file = False
   # open the input_file and start parsing
   if os.path.isfile(input_file) == False:
     print("this managed server doesn't have a startup.properties file")
@@ -77,7 +95,7 @@ for managed_server in managed_servers:
   # remove any existing "new" files from previous executions
   if os.path.isfile(output_file):
     os.remove(output_file)
-  #open startup.properties
+  # open startup.properties
   with open(input_file) as old_file:
     # get the contents for unique handling by AdminServer missing an argline
     oldfile_contents = ""
@@ -111,8 +129,7 @@ for managed_server in managed_servers:
             current_path = arg2[1]
             # remove a trailing double quote that is often there in the startWebLogic.sh file
             if current_path.endswith('"'):
-              current_path = current_path[1:-1]
-              print(current_path)
+              current_path = current_path[:-1]
             for row in csv_list:
               #print (row[1], jvmname)
               if row[0] == hostname and row[1] == managed_server:
@@ -212,11 +229,48 @@ for managed_server in managed_servers:
     new_file.close()
   old_file.close()
 
-  # if we made changes move the files around
+  # work on the policy file if a correct_path was found above
+  if correct_path != "":
+    correct_path_dir = os.path.dirname(correct_path)
+    policy_entry = 'grant codeBase "file:' + correct_path_dir + '/-" {\n  permission java.security.AllPermission;\n};\n'
+    search_pol = 'grant codeBase "file:' + correct_path_dir + '/-" {\n'
+    search_pol_old = 'grant codeBase "file:/files/relic/' + hostname
+    pol_line_exists = False
+    pol_old_line_exists = False
+    pol_file.seek(0)
+    for line in pol_file:
+      # check if we need to do anything
+      if line == search_pol:
+        pol_line_exists = True
+        print('the entry in the policy file for %s exists already - yay!' % (correct_path_dir))
+        # don't need to continue through the loop, so break
+        break
+
+      # check if the old path entry exists and replace it if so
+      elif line == search_pol_old:
+        pol_old_line_exists = True
+        #write the new line instead of the 
+        new_pol_file.write(search_pol)
+        print("Replaced the old path in the policy file\nNew policy file: " + policy_file_new)
+        overwrite_pol_file = True
+
+      # else write the other remaining lines to the new file for swapping out
+      else:
+        # only do this once
+        if write_pol_lines_once == False:
+          new_pol_file.write(line)
+
+    # change the write_pol_lines_once flag to true so we don't write the existing file a bunch of times
+    write_pol_lines_once = True
+    # if the exact line and the old line doesn't exist in pol_file, append the entry to the new policy file
+    if pol_line_exists == False and pol_old_line_exists == False:
+      # add new entry
+      new_pol_file.write(policy_entry)
+      print("Added a new entry to the policy file\nNew file: " + policy_file_new)
+      overwrite_pol_file = True
+
+  # if we made changes to the startup files, backup the orig and copy the new temp file over it
   if overwrite_file == True:
-    # get the uid and gid numbers for oracle:dba
-    uid = pwd.getpwnam("oracle").pw_uid
-    gid = grp.getgrnam("dba").gr_gid
     #backup the original file
     if os.path.isfile(bkup_file) == False:
       shutil.copy2(input_file, bkup_file)
@@ -235,7 +289,27 @@ for managed_server in managed_servers:
 
   print
 
+#if changes were made to the policy file, backup the orig and copy the new one over it
+new_pol_file.close()
+if overwrite_pol_file == True:
+  # backup
+  if os.path.isfile(policy_file_bkup) == False:
+    shutil.copy2(policy_file, policy_file_bkup)
+    os.chown(policy_file_bkup, uid, gid)
+    print("created backup: " + policy_file_bkup)
+  else:
+    policy_file_bkup = policy_file + "." + datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    shutil.copy2(policy_file, policy_file_bkup)
+    os.chown(policy_file_bkup, uid, gid)
+    print("created backup: " + policy_file_bkup)
+  # copy over
+  shutil.copy2(policy_file_new, policy_file)
+  os.chown(policy_file, uid, gid)
+  os.chown(policy_file_new, uid, gid)
+  print("copied the new policy file over: " + policy_file)
+
 #close the opened files
 csv_file.close()
+pol_file.close()
 
 # all done!

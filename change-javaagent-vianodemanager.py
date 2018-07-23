@@ -285,6 +285,8 @@ for managed_server in managed_servers:
     shutil.copy2(output_file, input_file)
     os.chown(output_file, uid, gid)
     os.chown(input_file, uid, gid)
+    if input_file.endswith('.sh'):
+      os.chmod(input_file, 0754)
     print("copied the new file over " + input_file)
 
   print
